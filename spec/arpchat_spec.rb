@@ -1,67 +1,68 @@
 require 'arpchat'
 
-describe ArpChat do
+describe ArpChat::Sender do
   describe "init" do
     it "name is 'anonymous'" do
       expect(
-        ArpChat.class_variable_get(:@@name)
+        ArpChat::Sender.class_variable_get(:@@name)
       ).to eq 'anonymous'
     end
 
     it "pcap is Pcap class" do
       expect(
-        ArpChat.class_variable_get(:@@pcap).class
+        ArpChat::Sender.class_variable_get(:@@pcap).class
       ).to eq PCAPRUB::Pcap
     end
 
     it {
       expect(
-        ArpChat.class_variable_get(:@@src)[:mac_addr]
+        ArpChat::Sender.class_variable_get(:@@src)[:mac_addr]
       ).to eq "10:6f:3f:34:21:5f"
     }
 
     it {
       expect(
-        ArpChat.class_variable_get(:@@src)[:ip_addr]
-      ).to eq "123.234.123.234"
+        ArpChat::Sender.class_variable_get(:@@src)[:ip_addr]
+      ).to eq "224.0.0.250"
     }
 
     it {
       expect(
-        ArpChat.class_variable_get(:@@dst)[:mac_addr]
+        ArpChat::Sender.class_variable_get(:@@dst)[:mac_addr]
       ).to eq "ff:ff:ff:ff:ff:ff"
     }
 
     it {
       expect(
-        ArpChat.class_variable_get(:@@dst)[:ip_addr]
-      ).to eq "123.234.123.234"
+        ArpChat::Sender.class_variable_get(:@@dst)[:ip_addr]
+      ).to eq "224.0.0.251"
     }
   end
 
   describe :name do
     it "should set name" do
       @name = "hogehoge-#{Time.now.to_f}"
-      ArpChat.name(@name)
+      ArpChat::Sender.name(@name)
       expect(
-        ArpChat.class_variable_get(:@@name)
+        ArpChat::Sender.class_variable_get(:@@name)
       ).to eq @name
     end
   end
 
   describe :send do
     context "when body is empty" do
-      it "raise ArpChat::BodyEmpty" do
+      it "raise ArpChat::Sender::BodyEmpty" do
         expect {
-          ArpChat.send("")
-        }.to raise_error(ArpChat::Error::BodyEmpty)
+          ArpChat::Sender.send("")
+        }.to raise_error(ArpChat::Sender::Error::BodyEmpty)
       end
     end
+    ArpChat::Sender.send("あいうえおかきくけこさしすせそ")
   end
 
   describe :ip_header do
     before do
-      @ip = ArpChat.ip_header
+      @ip = ArpChat::Sender.ip_header
     end
 
     it {
@@ -79,7 +80,7 @@ describe ArpChat do
 
   describe :arp_header do
     before do
-      @arp = ArpChat.arp_header
+      @arp = ArpChat::Sender.arp_header
     end
 
     it {
@@ -91,7 +92,7 @@ describe ArpChat do
     }
 
     it {
-      expect(@arp.sender_ip_addr).to eq "123.234.123.234"
+      expect(@arp.sender_ip_addr).to eq "224.0.0.250"
     }
 
     it {
@@ -99,13 +100,20 @@ describe ArpChat do
     }
 
     it {
-      expect(@arp.target_ip_addr).to eq "123.234.123.234"
+      expect(@arp.target_ip_addr).to eq "224.0.0.251"
+    }
+  end
+
+  describe :split do
+    it {
+      @arr = ArpChat::Sender.split("あいうえおかきくけこさしすせそ")
+      expect(@arr).to eq ["B0D0F0H0J0K0M0O0Q\u0001", "0S0U0W0Y0[0]0\u0000\u0000\u0000\u0000\u0000"]
     }
   end
 
   describe :write do
     it {
-      expect(ArpChat.write("hogehoge")).not_to eq -1
+      expect(ArpChat::Sender.write("hogehoge")).not_to eq -1
     }
   end
 end

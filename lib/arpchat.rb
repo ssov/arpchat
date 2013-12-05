@@ -1,13 +1,31 @@
 require 'bit-struct'
 require 'pcaprub'
-require 'ether_struct'
-require 'arp_struct'
+require_relative 'ether_struct'
+require_relative 'arp_struct'
 
-class ArpChat
-  @@name = "anonymous"
+module ArpChatModule
   @@pcap = Pcap.open_live("en0", 0xffff, false, 1)
-  @@src = { :mac_addr => "10:6f:3f:34:21:5f", :ip_addr => "123.234.123.234" }
-  @@dst = { :mac_addr => "ff:ff:ff:ff:ff:ff", :ip_addr => "123.234.123.234" }
+end
+
+class ArpChat; end
+
+class ArpChat::Receiver
+  include ArpChatModule
+  @@pcap.setfilter('arp')
+
+  def self.read(&block)
+    @@pcap.each_packet do |packet|
+      block.call(packet)
+    end
+  end
+end
+
+class ArpChat::Sender
+  include ArpChatModule
+
+  @@name = "anonymous"
+  @@src = { :mac_addr => "10:6f:3f:34:21:5f", :ip_addr => "224.0.0.250" }
+  @@dst = { :mac_addr => "ff:ff:ff:ff:ff:ff", :ip_addr => "224.0.0.251" }
 
   class Error
     class BodyEmpty < StandardError; end
@@ -19,6 +37,9 @@ class ArpChat
 
   def self.send(body)
     raise Error::BodyEmpty if body.empty?
+    self.split(body).each do |i|
+      self.write(i)
+    end
   end
 
   def self.ip_header
@@ -33,6 +54,20 @@ class ArpChat
       :target_ip_addr => @@dst[:ip_addr],
       :opcode => 0x01
     )
+  end
+
+  def self.split(body)
+    @body = body.unpack("U*").pack("S*")
+    @arr = []
+    buf = ""
+    @body.split(//).each do |i|
+      buf << i
+      if buf.size == 17
+        @arr << buf + "\1"
+        buf = ""
+      end
+    end
+    @arr << buf + "\0"*(18-buf.size)
   end
 
   def self.write(body)
