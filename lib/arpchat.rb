@@ -5,6 +5,9 @@ require_relative 'arp_struct'
 
 module ArpChatModule
   @@pcap = Pcap.open_live("en0", 0xffff, false, 1)
+  @@name = "anonymous"
+  @@src = { :mac_addr => "10:6f:3f:34:21:5f", :ip_addr => "224.#{rand(255)}.#{rand(255)}.#{rand(255)}" }
+  @@dst = { :mac_addr => "ff:ff:ff:ff:ff:ff", :ip_addr => "224.0.0.251" }
 end
 
 class ArpChat; end
@@ -14,18 +17,21 @@ class ArpChat::Receiver
   @@pcap.setfilter('arp')
 
   def self.read(&block)
-    @@pcap.each_packet do |packet|
-      block.call(packet)
+    buf = ""
+    @@pcap.each_data do |a|
+      case a[59]
+        when "\1"
+          buf << a[42,17]
+        when "\0"
+          str = (buf+a[42,18].unpack("A*").first).unpack("S*").pack("U*")
+          block.call(str)
+      end
     end
   end
 end
 
 class ArpChat::Sender
   include ArpChatModule
-
-  @@name = "anonymous"
-  @@src = { :mac_addr => "10:6f:3f:34:21:5f", :ip_addr => "224.0.0.250" }
-  @@dst = { :mac_addr => "ff:ff:ff:ff:ff:ff", :ip_addr => "224.0.0.251" }
 
   class Error
     class BodyEmpty < StandardError; end

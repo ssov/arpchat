@@ -22,12 +22,6 @@ describe ArpChat::Sender do
 
     it {
       expect(
-        ArpChat::Sender.class_variable_get(:@@src)[:ip_addr]
-      ).to eq "224.0.0.250"
-    }
-
-    it {
-      expect(
         ArpChat::Sender.class_variable_get(:@@dst)[:mac_addr]
       ).to eq "ff:ff:ff:ff:ff:ff"
     }
@@ -89,10 +83,6 @@ describe ArpChat::Sender do
 
     it {
       expect(@arp.sender_mac_addr).to eq "10:6f:3f:34:21:5f"
-    }
-
-    it {
-      expect(@arp.sender_ip_addr).to eq "224.0.0.250"
     }
 
     it {
