@@ -19,6 +19,7 @@ class ArpChat::Receiver
   def self.read(&block)
     buf = ""
     @@pcap.each_data do |a|
+      sender = a[0x1c,4].unpack("C4").join(".")
       case a[59]
         when "\1"
           buf << a[42,17]
@@ -28,7 +29,7 @@ class ArpChat::Receiver
             str << "\0"
           end
           str = str.unpack("S*").pack("U*")
-          block.call(str)
+          block.call(sender, str)
           buf = ""
       end
     end

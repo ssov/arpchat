@@ -1,8 +1,8 @@
 require './lib/arpchat.rb'
 
 Thread.new do
-  ArpChat::Receiver.read do |body|
-    puts body.chomp
+  ArpChat::Receiver.read do |sender, body|
+    puts "#{sender} > #{body}"
   end
 end
 
