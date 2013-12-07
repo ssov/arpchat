@@ -23,8 +23,13 @@ class ArpChat::Receiver
         when "\1"
           buf << a[42,17]
         when "\0"
-          str = (buf+a[42,18].unpack("A*").first).unpack("S*").pack("U*")
+          str = (buf+a[42,18]).encode("ASCII-8BIT").unpack("A*").first
+          unless str.size%2 == 0
+            str << "\0"
+          end
+          str = str.unpack("S*").pack("U*")
           block.call(str)
+          buf = ""
       end
     end
   end
@@ -74,6 +79,8 @@ class ArpChat::Sender
       end
     end
     @arr << buf + "\0"*(18-buf.size)
+
+    @arr.map!{|a| a.encode("ASCII-8BIT")}
   end
 
   def self.write(body)
