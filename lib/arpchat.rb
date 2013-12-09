@@ -1,43 +1,105 @@
 require 'bit-struct'
 require 'pcaprub'
+require 'msgpack'
 require_relative 'ether_struct'
 require_relative 'arp_struct'
 
-module ArpChatModule
+CYCLE=10
+
+module ArpChatCore
   @@pcap = Pcap.open_live("en0", 0xffff, false, 1)
+  @@pcap.setfilter('arp')
+
   @@name = "anonymous"
   @@src = { :mac_addr => "10:6f:3f:34:21:5f", :ip_addr => "224.#{rand(255)}.#{rand(255)}.#{rand(255)}" }
   @@dst = { :mac_addr => "ff:ff:ff:ff:ff:ff", :ip_addr => "224.0.0.251" }
+
+  MESSAGE = 0x01 
+  HEARTBEAT = 0x10
+
+  class Peers
+    @@peers = []
+    class Peer
+      attr_accessor :ip, :updated_at
+      def initialize(*args)
+        args = args.first
+        args.each do |k, v|
+          self.instance_variable_set("@#{k}".to_sym, v)
+        end
+      end
+    end
+
+    def self.update(ip)
+      if @@peers.select{|peer| peer.ip == ip} == []
+        @@peers << Peer.new(:ip => ip, :updated_at => Time.now)
+      else
+        @@peers.select!{|peer| peer.ip != ip}
+        @@peers << Peer.new(:ip => ip, :updated_at => Time.now)
+      end
+    end
+
+    def self.leave
+      @time = Time.now
+      @@peers.select{|peer| (@time - peer.updated_at) > CYCLE}.each do |peer|
+        puts ">> leave #{peer.ip}"
+      end
+      @@peers.select!{|peer| (@time - peer.updated_at) <= CYCLE}
+    end
+  end
 end
 
 class ArpChat; end
 
-class ArpChat::Receiver
-  include ArpChatModule
-  @@pcap.setfilter('arp')
+class ArpChat::Receiver < ArpChat
+  include ArpChatCore
+  @@peers = []
 
   def self.read(&block)
     buf = ""
     @@pcap.each_data do |a|
       sender = a[0x1c,4].unpack("C4").join(".")
+      next if sender == @@src[:ip_addr]
+      
       case a[59]
         when "\1"
           buf << a[42,17]
         when "\0"
-          str = (buf+a[42,18]).encode("ASCII-8BIT").unpack("A*").first
-          unless str.size%2 == 0
-            str << "\0"
+          str = (buf + a[42,18]).encode("ASCII-8BIT").unpack("A*").first
+          begin
+            name, func, body = MessagePack.unpack(str)
+            case func
+              when MESSAGE
+                Peers.update(sender)
+                block.call(name, body)
+              when HEARTBEAT
+                Peers.update(sender)
+                puts "#{sender} exists."
+            end
+          rescue => e
+            p e
           end
-          str = str.unpack("S*").pack("U*")
-          block.call(sender, str)
           buf = ""
+      end
+    end
+  end
+  
+  def self.heartbeat
+    Thread.new do
+      loop do
+        begin
+          ArpChat::Sender.send(HEARTBEAT, 'heartbeat')
+          sleep CYCLE
+          Peers.leave
+        rescue => e
+          p e
+        end
       end
     end
   end
 end
 
-class ArpChat::Sender
-  include ArpChatModule
+class ArpChat::Sender < ArpChat
+  include ArpChatCore
 
   class Error
     class BodyEmpty < StandardError; end
@@ -47,15 +109,19 @@ class ArpChat::Sender
     @@name = name
   end
 
-  def self.send(body)
+  def self.send(func, body)
     raise Error::BodyEmpty if body.empty?
-    self.split(body).each do |i|
+    self.split(func, body).each do |i|
       self.write(i)
     end
   end
 
   def self.ip_header
-    EtherStruct.new(:type => 0x0806, :src_addr => @@src[:mac_addr], :dst_addr => @@dst[:mac_addr])
+    EtherStruct.new(
+      :type => 0x0806,
+      :src_addr => @@src[:mac_addr],
+      :dst_addr => @@dst[:mac_addr]
+    )
   end
 
   def self.arp_header
@@ -68,8 +134,8 @@ class ArpChat::Sender
     )
   end
 
-  def self.split(body)
-    @body = body.unpack("U*").pack("S*")
+  def self.split(func, body)
+    @body = [@@name, func, body].to_msgpack
     @arr = []
     buf = ""
     @body.split(//).each do |i|
