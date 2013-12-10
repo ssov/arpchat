@@ -1,16 +1,16 @@
 require './lib/arpchat.rb'
 
-include ArpChatCore
+include ArpChat
 
 Thread.new do
-  ArpChat::Receiver.read do |sender, body|
+  Receiver.read do |sender, body|
     puts "#{sender} > #{body}"
   end
 end
 
-ArpChat::Receiver.heartbeat
+Receiver.heartbeat
 
 loop do
   str = gets.chomp
-  ArpChat::Sender.send(MESSAGE, str)
+  Sender.send(MESSAGE, str)
 end
