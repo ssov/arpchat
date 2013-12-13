@@ -1,14 +1,21 @@
-require './lib/arpchat.rb'
+require_relative 'lib/arpchat.rb'
 
 include ArpChat
 
-Thread.new do
-  Receiver.read do |sender, body|
-    puts "#{sender} > #{body}"
-  end
-end
+configure do |config|
+  config.receiveMessage = Proc.new {|src, name, body|
+    puts "#{name}(#{src}) > #{body}"
+  }
 
-Sender.heartbeat
+  config.joinPeer = Proc.new {|src|
+    puts "#{src} has joined."
+  }
+
+  config.leftPeer = Proc.new {|peer|
+    puts "#{peer.ip} has left. (last updated: #{peer.updated_at})"
+  }
+end
+setup
 
 loop do
   str = gets.chomp
