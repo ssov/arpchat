@@ -8,7 +8,7 @@ Thread.new do
   end
 end
 
-Receiver.heartbeat
+Sender.heartbeat
 
 loop do
   str = gets.chomp
