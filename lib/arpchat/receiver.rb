@@ -6,27 +6,29 @@ module ArpChat
       def read
         buf = {}
         @@pcap.each_data do |a|
-          src = a[0x1c,4].unpack("C4").join(".")
-          dst = a[0x26,4].unpack("C4").join(".")
-          next if src == @@src[:ip_addr]
-          next unless dst == CHATROOM_ADDR
+          src_ip = a[0x1c,4].unpack("C4").join(".")
+          dst_ip = a[0x26,4].unpack("C4").join(".")
+          src_mac = a[0x06,6].unpack("C*").map{|i| i.to_s(16)}.join(":")
+
+          next if src_ip == @@src[:ip_addr]
+          next unless dst_ip == CHATROOM_ADDR || dst_ip == @@src[:ip_addr]
 
           case a[0x15].unpack("U").first
             when ONLY
-              buf[src] = a[42,18].encode("ASCII-8BIT").unpack("A*").first
-              self.switch(src, buf[src])
+              buf[src_ip] = a[42,18].encode("ASCII-8BIT").unpack("A*").first
+              self.switch(src_ip, src_mac, buf[src_ip])
             when START
-              buf[src] = a[42,18]
+              buf[src_ip] = a[42,18]
             when FRAGMENT
-              buf[src] += a[42,18]
+              buf[src_ip] += a[42,18]
             when LAST
-              buf[src] = (buf[src] + a[42,18]).encode("ASCII-8BIT").unpack("A*").first
-              self.switch(src, buf[src])
+              buf[src_ip] = (buf[src_ip] + a[42,18]).encode("ASCII-8BIT").unpack("A*").first
+              self.switch(src_ip, src_mac, buf[src_ip])
           end
         end
       end
       
-      def switch(src, str)
+      def switch(src_ip, src_mac, str)
         begin
           name, func, body = MessagePack.unpack(str)
         rescue => e
@@ -36,17 +38,25 @@ module ArpChat
 
         case func
           when MESSAGE
-            Peers.update(src)
+            Peers.update(ip: src_ip, mac: src_mac)
+            peer = Peers.search(src_ip)
+            return if peer.nil?
             begin
-              @@proc.receiveMessage.call(src, name, body)
+              @@proc.receiveMessage.call(peer, body)
             rescue => e
               raise ProcError
             end
           when HEARTBEAT
-            Peers.update(src)
+            Peers.update(ip: src_ip, mac: src_mac)
           when JOIN
-            @@proc.joinPeer.call(src)
-            Peers.update(src)
+            peer = Peers.update(ip: src_ip, mac: src_mac, name: name)
+            @@proc.joinPeer.call(peer)
+          when LEAVE
+            Peers.leave(src_ip)
+          when YOURNAME
+            Sender.send(MYNAME, @@name, {mac:src_mac, ip:src_ip})
+          when MYNAME
+            Peers.update(ip: src_ip, name: body)
         end
       end
     end

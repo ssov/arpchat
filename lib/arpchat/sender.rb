@@ -13,20 +13,35 @@ module ArpChat
         self.send(JOIN, 'join')
       end
 
-      def send(func, body)
+      def leave
+        self.send(LEAVE, 'leave')
+      end
+
+      def message(body)
+        self.send(MESSAGE, body)
+      end
+
+      def send(func, body, *option)
         raise Error::BodyEmpty if body.empty?
         packets = self.split(func, body)
+ 
+        if option.first.class == Hash
+          option = option.first
+          dst_mac = option[:mac] unless option[:mac].nil?
+          dst_ip = option[:ip] unless option[:ip].nil?
+        end
+
         if packets.size == 1
-          self.write(packets.first, ONLY)
+          self.write(packets.first, ONLY, dst_mac, dst_ip)
         else
           packets.each do |i|
             case i
               when packets.first
-                self.write(i, START)
+                self.write(i, START, dst_mac, dst_ip)
               when packets.last
-                self.write(i, LAST)
+                self.write(i, LAST, dst_mac, dst_ip)
               else
-                self.write(i, FRAGMENT)
+                self.write(i, FRAGMENT, dst_mac, dst_ip)
             end
           end
         end
@@ -61,15 +76,18 @@ module ArpChat
             buf = ""
           end
         end
-        arr << buf + "\0"*(18-buf.size)
-
-        arr.map!{|a| a.encode("ASCII-8BIT")}
+        unless buf.empty?
+          arr << buf + "\0"*(18-buf.size)
+        end
+        arr
       end
 
-      def write(body, opcode=0)
+      def write(body, opcode=0, dst_mac, dst_ip)
         arp = self.arp_header
         arp.opcode = opcode
         arp.body = body
+        arp.target_mac_addr = dst_mac unless dst_mac.nil?
+        arp.target_ip_addr = dst_ip unless dst_ip.nil?
         ip = self.ip_header
         ip.body = arp.to_s
         @@pcap.inject(ip.to_s)

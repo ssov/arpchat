@@ -3,21 +3,26 @@ require_relative 'lib/arpchat.rb'
 include ArpChat
 
 configure do |config|
-  config.receiveMessage = Proc.new {|src, name, body|
-    puts "#{name}(#{src}) > #{body}"
+  config.receiveMessage = Proc.new {|peer, body|
+    puts "#{peer.name}(#{peer.ip}) > #{body}"
   }
 
-  config.joinPeer = Proc.new {|src|
-    puts "#{src} has joined."
+  config.joinPeer = Proc.new {|peer|
+    puts "#{peer.ip} has joined."
   }
 
-  config.leftPeer = Proc.new {|peer|
+  config.leavePeer = Proc.new {|peer|
     puts "#{peer.ip} has left. (last updated: #{peer.updated_at})"
   }
 end
 setup
 
 loop do
-  str = gets.chomp
-  Sender.send(MESSAGE, str)
+  begin
+    str = gets.chomp
+    Sender.message(str)
+  rescue Interrupt
+    Sender.leave
+    break
+  end
 end
