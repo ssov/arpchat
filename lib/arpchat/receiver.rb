@@ -30,7 +30,7 @@ module ArpChat
       
       def switch(src_ip, src_mac, str)
         begin
-          name, func, body = MessagePack.unpack(str)
+          func, body = MessagePack.unpack(str)
         rescue => e
           # unpack error
           return
@@ -49,7 +49,7 @@ module ArpChat
           when HEARTBEAT
             Peers.update(ip: src_ip, mac: src_mac)
           when JOIN
-            peer = Peers.update(ip: src_ip, mac: src_mac, name: name)
+            peer = Peers.update(ip: src_ip, mac: src_mac, name: body)
             @@proc.joinPeer.call(peer)
           when LEAVE
             Peers.leave(src_ip)

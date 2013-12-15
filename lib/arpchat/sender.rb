@@ -10,7 +10,7 @@ module ArpChat
       end
 
       def join
-        self.send(JOIN, 'join')
+        self.send(JOIN, @@name)
       end
 
       def leave
@@ -65,7 +65,7 @@ module ArpChat
       end
 
       def split(func, body)
-        body = [@@name, func, body].to_msgpack
+        body = [func, body].to_msgpack
         arr = []
         buf = ""
 
